@@ -141,6 +141,6 @@ class VietnameseMlTranslator(
             "center","left","right","match","wrap"
         )
         private val PLACEHOLDER =
-            Regex("%(?:\\d+\\$)?[sdfox]|#\\{[^}]+}|@\\w+[\\w./:-]*|\\$\\{[^}]+}|\\\\n")
+            Regex("%(?:\\d+\\$)?[sdfox]|#\\{[^}]+\\}|@\\w+[\\w./:_-]*|\\$\\{[^}]+\\}|\\\\n")
     }
 }

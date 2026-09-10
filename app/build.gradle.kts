@@ -12,8 +12,8 @@ android {
         applicationId = "com.m4x.themestudio"
         minSdk = 29
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.4.0"
+        versionCode = 6
+        versionName = "2.5.0"
     }
 
     buildFeatures {
