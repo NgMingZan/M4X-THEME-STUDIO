@@ -131,10 +131,10 @@ class VietnameseMlTranslator(
 
     companion object {
         private val CJK = Regex("[\\u3400-\\u9FFF]")
-        private val JAPANESE = Regex("[\\p{IsHiragana}\\p{IsKatakana}]")
-        private val KOREAN = Regex("[\\p{IsHangul}]")
+        private val JAPANESE = Regex("[\\u3040-\\u30FF\\u31F0-\\u31FF]")
+        private val KOREAN = Regex("[\\u1100-\\u11FF\\u3130-\\u318F\\uAC00-\\uD7AF]")
         private val LATIN = Regex("[A-Za-z]")
-        private val HAS_LETTER = Regex("[A-Za-z\\u3400-\\u9FFF\\p{IsHiragana}\\p{IsKatakana}\\p{IsHangul}]")
+        private val HAS_LETTER = Regex("[A-Za-z\\u3400-\\u9FFF\\u3040-\\u30FF\\u31F0-\\u31FF\\u1100-\\u11FF\\u3130-\\u318F\\uAC00-\\uD7AF]")
         private val FILE_LIKE = Regex("(?i)^[\\w .-]+\\.(png|jpe?g|webp|xml|maml|json|ttf|otf|zip|mtz)$")
         private val CODE_WORDS = setOf(
             "true","false","null","normal","default","none","visible","gone",

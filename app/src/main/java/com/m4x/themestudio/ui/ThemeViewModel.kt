@@ -54,7 +54,10 @@ class ThemeViewModel(app: Application) : AndroidViewModel(app) {
                 _themes.value = store.loadAll()
                 onResult(Result.success(result.getOrThrow().second))
             } else {
-                onResult(Result.failure(result.exceptionOrNull()!!))
+                run {
+                val e = result.exceptionOrNull()!!
+                onResult(Result.failure(IllegalStateException(e.m4xDetail(), e)))
+            }
             }
             _progress.value = 0
             _busy.value = false
@@ -73,4 +76,18 @@ class ThemeViewModel(app: Application) : AndroidViewModel(app) {
         _themes.value = store.loadAll()
     }
 
+}
+
+private fun Throwable.m4xDetail(): String {
+    val parts = mutableListOf<String>()
+    var t: Throwable? = this
+    var n = 0
+    while (t != null && n < 5) {
+        val name = t::class.java.simpleName.ifBlank { t::class.java.name }
+        val msg = t.message?.takeIf { it.isNotBlank() } ?: "(không có message)"
+        parts += "$name: $msg"
+        t = t.cause
+        n++
+    }
+    return parts.joinToString(" <- ")
 }
