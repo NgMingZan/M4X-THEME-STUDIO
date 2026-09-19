@@ -26,6 +26,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 class MtzProcessor(private val context: Context, private val store: ThemeStore) {
+    private val validator = MtzValidator()
     private val previewHints = listOf(
         "preview/preview_lock_0.jpg", "preview/preview_home_0.jpg", "preview.jpg",
         "thumbnail.jpg", "thumbnail.png", "preview.png", "wallpaper/default_wallpaper.jpg"
@@ -50,7 +51,7 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
             requireNotNull(input) { "Không thể mở tệp đã chọn" }
             FileOutputStream(source).use { out -> input.copyTo(out) }
         }
-        require(isZip(source)) { "Tệp không phải MTZ/ZIP/lockscreen dạng ZIP hợp lệ" }
+        validator.requireValid(source, "Theme/Lockscreen")
 
         val stats = scanArchive(source)
         val previewPath = extractPreview(source, dir)
@@ -81,19 +82,24 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         val dir = store.themeDir(info.id)
         val outName = translatedFileName(info)
         val output = File(dir, outName)
+        val tempOutput = File(dir, ".$outName.tmp")
+        if (tempOutput.exists()) tempOutput.delete()
         val stats = ProcessStats()
 
         VietnameseMlTranslator(context, options.customPairs).use { translator ->
             ImageTextVietnamizer(translator).use { imageVietnamizer ->
                 FileInputStream(source).use { input ->
-                    FileOutputStream(output).use { out ->
+                    FileOutputStream(tempOutput).use { out ->
                         processZip(input, out, 0, options, translator, imageVietnamizer, stats, onProgress)
                     }
                 }
             }
         }
 
-        require(isZip(output) && output.length() > 0) { "Đóng gói tệp Việt hóa thất bại" }
+        require(tempOutput.length() > 0) { "Đóng gói tệp Việt hóa thất bại" }
+        validator.requireValid(tempOutput, "Bản Việt hóa")
+        if (output.exists()) require(output.delete()) { "Không thể thay bản Việt hóa cũ" }
+        require(tempOutput.renameTo(output)) { "Không thể hoàn tất tệp Việt hóa" }
         val updated = info.copy(translatedPath = output.absolutePath)
         store.save(updated)
         val report = TranslationReport(

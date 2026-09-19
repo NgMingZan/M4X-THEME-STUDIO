@@ -1,26 +1,31 @@
-# M4X Theme Studio V2.2 — NO ROOT
+# M4X Theme Studio V3.0 — NO ROOT
 
-Bản này cố ý **không dùng root, Shizuku, su hoặc quyền hệ thống**.
+M4X Theme Studio là công cụ Android xử lý theme Xiaomi/HyperOS theo luồng tệp chuẩn Android, không yêu cầu root để đọc, Việt hoá và đóng gói MTZ.
 
-## Luồng sử dụng
-1. Chọn `.mtz`, `.zip` hoặc file `lockscreen` bằng Android Storage Access Framework.
-2. App sao chép tệp vào vùng riêng của ứng dụng.
-3. Tự mở ZIP/MTZ và các component ZIP lồng nhau.
-4. Quét XML/MAML và OCR ảnh Trung/Anh.
-5. Dịch sang tiếng Việt bằng ML Kit.
-6. Ghi thay đổi và đóng gói lại.
-7. Xuất vào `Download/M4XThemeStudio`.
-8. Mở Xiaomi Theme Manager và nhập/áp dụng thủ công.
+## V3.0 có gì
 
-## Không cần root cho
-- Đọc MTZ/lockscreen do người dùng chọn.
-- Việt hóa XML/MAML.
-- OCR và chỉnh ảnh.
-- Tạo/đóng gói MTZ.
-- Xuất tệp ra Downloads.
+- Nhập `.mtz`, `.zip`, `.bak` hoặc lockscreen dạng ZIP.
+- Kiểm tra cấu trúc MTZ/ZIP trước khi xử lý.
+- Chặn archive có đường dẫn bất thường/traversal và giới hạn archive quá lớn.
+- Giữ nguyên tệp gốc.
+- Xử lý ra tệp tạm, kiểm tra lại rồi mới thay bản output hoàn chỉnh.
+- Quét XML/MAML/JSON/text trong theme và ZIP lồng nhau.
+- Dịch Trung/Anh/Nhật/Hàn → Việt bằng ML Kit.
+- Bảo vệ placeholder như `%s`, `%1$d`, `${...}`, `#{...}`.
+- OCR ảnh khi người dùng bật tuỳ chọn.
+- Xuất kết quả vào `Download/M4XThemeStudio`.
+- GitHub Actions tự build APK với JDK 17 + Android API 35.
 
-## Root vẫn là giới hạn của Android/Xiaomi ở đâu?
-Không-root **không thể** đọc thẳng dữ liệu riêng của `com.android.thememanager`, tự đồng bộ toàn bộ theme đã cài, xóa theme trong private catalog hoặc ép Theme Manager áp theme bằng API private. Vì vậy V2.2 bỏ hẳn các bước đó và dùng nhập/xuất tệp thủ công.
+## Quy tắc an toàn
 
-## Build APK
-Upload toàn bộ project lên GitHub → Actions → `Build Android APK` → `Run workflow` → tải artifact `M4X-Theme-Studio-debug`.
+V3 không ghi đè source đã nhập. Khi Việt hoá, app tạo file tạm, đóng gói, kiểm tra ZIP lần cuối, sau đó mới tạo bản `_VI`.
+
+## Không root
+
+Không-root vẫn không thể tự đọc dữ liệu riêng của `com.android.thememanager` hoặc ép Xiaomi Theme Manager áp theme bằng private API. Sau khi xuất MTZ, người dùng nhập/áp dụng thủ công trong Theme Manager.
+
+## Build
+
+GitHub → Actions → **Build Android APK** → Run workflow.
+
+Artifact: `M4X-Theme-Studio-V3-debug`

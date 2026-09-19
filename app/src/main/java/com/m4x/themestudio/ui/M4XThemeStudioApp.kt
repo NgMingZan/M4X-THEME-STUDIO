@@ -174,7 +174,7 @@ private fun HomeScreen(themeCount: Int, onImport: () -> Unit, onBak: () -> Unit,
             }
         }
         item {
-            Text("M4X Theme Studio V2.2 NO ROOT • MTZ + XML + OCR ảnh + Lockscreen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("M4X Theme Studio V3.0 NO ROOT • MTZ + XML + OCR ảnh + Lockscreen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -298,14 +298,14 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
             Column(Modifier.padding(horizontal = 24.dp)) {
                 Text(theme?.name ?: "Chưa chọn chủ đề", fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(6.dp))
-                Text("Engine V2 tự mở MTZ/lockscreen, quét ZIP lồng nhau, nhận diện chữ trong XML/MAML và OCR chữ Trung/Anh trong ảnh rồi chuyển sang tiếng Việt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Engine V3 tự mở MTZ/lockscreen, quét ZIP lồng nhau, nhận diện chữ trong XML/MAML và OCR chữ Trung/Anh trong ảnh rồi chuyển sang tiếng Việt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
                 OptionRow("Việt hóa XML", "Dịch chuỗi tiếng Trung/Anh phổ biến trong lockscreen, statusbar…", xml) { xml = it }
                 OptionRow("Chuẩn hóa locale", "Đổi zh_CN / zh-CN sang vi_VN / vi-VN", locale) { locale = it }
                 OptionRow("Manifest / description", "Việt hóa mô tả và metadata dạng văn bản", manifest) { manifest = it }
                 OptionRow("OCR ảnh có chữ", "Tự nhận diện chữ Trung/Anh trong PNG/JPG/WebP rồi ghi chữ Việt trực tiếp lên ảnh", images) { images = it }
                 Spacer(Modifier.height(8.dp))
-                Text("Không cần Gemini API: bản V2 dùng ML Kit trên máy. Lần đầu có thể cần tải model ngôn ngữ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text("Không cần Gemini API: bản V3 dùng ML Kit trên máy. Lần đầu có thể cần tải model ngôn ngữ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(18.dp))
                 Text("Từ thay thế riêng", fontWeight = FontWeight.Bold)
                 Text("Mỗi dòng: chữ gốc=tiếng Việt. Ví dụ: 解锁=Vuốt để mở khóa", style = MaterialTheme.typography.bodySmall)
