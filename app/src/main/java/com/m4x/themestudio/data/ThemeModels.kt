@@ -48,6 +48,8 @@ data class TranslationOptions(
     val normalizeVietnameseLocale: Boolean = true,
     val translateManifest: Boolean = true,
     val translateImages: Boolean = true,
+    val useGeminiForImages: Boolean = false,
+    val geminiApiKey: String = "",
     val preserveImages: Boolean = false,
     val customPairs: Map<String, String> = emptyMap()
 )
@@ -59,5 +61,6 @@ data class TranslationReport(
     val replacements: Int,
     val skippedBinaryFiles: Int,
     val ocrImages: Int = 0,
-    val ocrTranslatedLines: Int = 0
+    val ocrTranslatedLines: Int = 0,
+    val geminiImages: Int = 0
 )
