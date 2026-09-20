@@ -26,6 +26,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 class MtzProcessor(private val context: Context, private val store: ThemeStore) {
+    private val validator = MtzValidator()
     private val previewHints = listOf(
         "preview/preview_lock_0.jpg", "preview/preview_home_0.jpg", "preview.jpg",
         "thumbnail.jpg", "thumbnail.png", "preview.png", "wallpaper/default_wallpaper.jpg"
@@ -38,7 +39,8 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         var replacements: Int = 0,
         var skippedBinaryFiles: Int = 0,
         var ocrImages: Int = 0,
-        var ocrLines: Int = 0
+        var ocrLines: Int = 0,
+        var geminiImages: Int = 0
     )
 
     fun importTheme(uri: Uri): ThemeInfo {
@@ -52,7 +54,6 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         }
         require(isZip(source)) { "Tệp không phải MTZ/ZIP/lockscreen dạng ZIP hợp lệ" }
 
-        val stats = scanArchive(source)
         val previewPath = extractPreview(source, dir)
         val cleanName = displayName.substringBeforeLast('.', displayName).ifBlank { "Chủ đề" }
         val info = ThemeInfo(
@@ -62,8 +63,8 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
             sourceFileName = displayName,
             previewPath = previewPath,
             sizeBytes = source.length(),
-            xmlCount = stats.xml,
-            imageCount = stats.images
+            xmlCount = 0,
+            imageCount = 0
         )
         store.save(info)
         return info
@@ -78,22 +79,31 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
     ): Pair<ThemeInfo, TranslationReport> {
         val source = File(info.sourcePath)
         require(source.exists()) { "Không tìm thấy tệp gốc" }
+        validator.requireValid(source, "Theme nguồn")
+        val totalFiles = countArchiveEntries(source).coerceAtLeast(1)
         val dir = store.themeDir(info.id)
         val outName = translatedFileName(info)
         val output = File(dir, outName)
+        val tempOutput = File(dir, ".$outName.tmp")
+        if (tempOutput.exists()) tempOutput.delete()
         val stats = ProcessStats()
 
         VietnameseMlTranslator(context, options.customPairs).use { translator ->
-            ImageTextVietnamizer(translator).use { imageVietnamizer ->
+            val gemini = options.geminiApiKey.trim().takeIf { options.useGeminiForImages && it.isNotBlank() }
+                ?.let(::GeminiImageTranslator)
+            ImageTextVietnamizer(translator, gemini).use { imageVietnamizer ->
                 FileInputStream(source).use { input ->
-                    FileOutputStream(output).use { out ->
-                        processZip(input, out, 0, options, translator, imageVietnamizer, stats, onProgress)
+                    FileOutputStream(tempOutput).use { out ->
+                        processZip(input, out, 0, options, translator, imageVietnamizer, stats, totalFiles, onProgress)
                     }
                 }
             }
         }
 
-        require(isZip(output) && output.length() > 0) { "Đóng gói tệp Việt hóa thất bại" }
+        require(tempOutput.length() > 0) { "Đóng gói tệp Việt hóa thất bại" }
+        validator.requireValid(tempOutput, "Bản Việt hóa")
+        if (output.exists()) require(output.delete()) { "Không thể thay bản Việt hóa cũ" }
+        require(tempOutput.renameTo(output)) { "Không thể hoàn tất tệp Việt hóa" }
         val updated = info.copy(translatedPath = output.absolutePath)
         store.save(updated)
         val report = TranslationReport(
@@ -103,7 +113,8 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
             replacements = stats.replacements,
             skippedBinaryFiles = stats.skippedBinaryFiles,
             ocrImages = stats.ocrImages,
-            ocrTranslatedLines = stats.ocrLines
+            ocrTranslatedLines = stats.ocrLines,
+            geminiImages = stats.geminiImages
         )
         onProgress(100)
         return updated to report
@@ -117,6 +128,7 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         translator: VietnameseMlTranslator,
         imageVietnamizer: ImageTextVietnamizer,
         stats: ProcessStats,
+        totalFiles: Int,
         onProgress: (Int) -> Unit
     ) {
         require(depth <= MAX_NESTED_DEPTH) { "Theme có quá nhiều lớp ZIP lồng nhau" }
@@ -133,7 +145,7 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
                             isZipBytes(bytes) && depth < MAX_NESTED_DEPTH -> {
                                 val nested = ByteArrayOutputStream()
                                 runCatching {
-                                    processZip(ByteArrayInputStream(bytes), nested, depth + 1, options, translator, imageVietnamizer, stats, onProgress)
+                                    processZip(ByteArrayInputStream(bytes), nested, depth + 1, options, translator, imageVietnamizer, stats, totalFiles, onProgress)
                                     nested.toByteArray()
                                 }.getOrElse { bytes }
                             }
@@ -157,6 +169,7 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
                                     stats.changedFiles++
                                     stats.ocrImages++
                                     stats.ocrLines += result.translatedLines
+                                    if (result.usedGemini) stats.geminiImages++
                                     stats.replacements += result.translatedLines
                                     result.bytes
                                 } else bytes
@@ -165,9 +178,8 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
                         }
                         zout.write(rewritten)
                         stats.scannedFiles++
-                        // Progress is intentionally approximate because extensionless nested lockscreen archives
-                        // are discovered while processing.
-                        onProgress((5 + (stats.scannedFiles % 90)).coerceAtMost(95))
+                        val percent = 5 + ((stats.scannedFiles * 90L) / totalFiles).toInt()
+                        onProgress(percent.coerceIn(5, 95))
                     }
                     zout.closeEntry()
                     zin.closeEntry()
@@ -241,6 +253,31 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         return uri
     }
 
+    private fun countArchiveEntries(file: File): Int =
+        FileInputStream(file).use { input -> countArchiveEntries(input, 0) }
+
+    private fun countArchiveEntries(input: InputStream, depth: Int): Int {
+        if (depth > MAX_NESTED_DEPTH) return 0
+        var count = 0
+        ZipInputStream(BufferedInputStream(input)).use { zin ->
+            var e = zin.nextEntry
+            while (e != null) {
+                if (!e.isDirectory) {
+                    count++
+                    val bytes = runCatching { readEntryBytes(zin, MAX_ENTRY_BYTES) }.getOrNull()
+                    if (bytes != null && isZipBytes(bytes) && depth < MAX_NESTED_DEPTH) {
+                        count += runCatching {
+                            countArchiveEntries(ByteArrayInputStream(bytes), depth + 1)
+                        }.getOrDefault(0)
+                    }
+                }
+                zin.closeEntry()
+                e = zin.nextEntry
+            }
+        }
+        return count
+    }
+
     private fun scanArchive(file: File): ArchiveStats = FileInputStream(file).use { input -> scanArchive(input, 0) }
 
     private fun scanArchive(input: InputStream, depth: Int): ArchiveStats {
@@ -270,8 +307,10 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         var previewPath: String? = null
         var fallback: Pair<String, ByteArray>? = null
         ZipInputStream(BufferedInputStream(FileInputStream(source))).use { zin ->
+            var seen = 0
             var e = zin.nextEntry
-            while (e != null && previewPath == null) {
+            while (e != null && previewPath == null && seen < FAST_IMPORT_ENTRY_LIMIT) {
+                seen++
                 if (!e.isDirectory && isImage(e.name.lowercase())) {
                     val lower = e.name.lowercase()
                     val bytes = runCatching { readEntryBytes(zin, 8_000_000) }.getOrNull()
@@ -368,6 +407,7 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
     companion object {
         private const val MAX_ENTRY_BYTES = 64_000_000
         private const val MAX_NESTED_DEPTH = 4
+        private const val FAST_IMPORT_ENTRY_LIMIT = 160
         private val DOUBLE_ATTR = Regex("(?i)(\\b(?:text|label|title|content|hint|description|summary|message)\\s*=\\s*\")([^\"\\r\\n]{2,180})\"")
         private val SINGLE_ATTR = Regex("(?i)(\\b(?:text|label|title|content|hint|description|summary|message)\\s*=\\s*')([^'\\r\\n]{2,180})'")
         private val TEXT_NODE = Regex(">([^<>\\r\\n]{2,180})<")

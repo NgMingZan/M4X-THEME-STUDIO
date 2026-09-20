@@ -21,113 +21,178 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.m4x.themestudio.data.ThemeInfo
 import com.m4x.themestudio.data.TranslationOptions
 import java.io.File
+import kotlinx.coroutines.launch
 
-private enum class Screen { Home, Themes, Translate, Create }
+private enum class Screen { Home, Themes, Translate, Create, Settings, About }
 
 @Composable
 fun M4XThemeStudioApp(vm: ThemeViewModel) {
     val themes by vm.themes.collectAsState()
     val busy by vm.busy.collectAsState()
     val progress by vm.progress.collectAsState()
+
     var screen by remember { mutableStateOf(Screen.Home) }
     var selected by remember { mutableStateOf<ThemeInfo?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importTheme(uri) { r ->
-            message = r.fold({ "Đã nhập ${it.name}" }, { it.message ?: "Mở Theme/Lockscreen thất bại" })
+            message = r.fold(
+                { "Đã nhập ${it.name}. Dữ liệu sâu sẽ được quét khi Việt hóa." },
+                { it.message ?: "Mở Theme/Lockscreen thất bại" }
+            )
             if (r.isSuccess) screen = Screen.Themes
         }
     }
 
     val bakLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.convertBak(uri) { r ->
-            message = r.fold({ "Đã chuyển BAK/ZIP thành chủ đề ${it.name}" }, { it.message ?: "Chuyển đổi thất bại" })
+            message = r.fold(
+                { "Đã nhập ${it.name}" },
+                { it.message ?: "Chuyển đổi thất bại" }
+            )
         }
     }
 
-    Scaffold(
-        snackbarHost = {
-            SnackbarHost(remember { SnackbarHostState() })
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (screen) {
-                Screen.Home -> HomeScreen(
-                    themeCount = themes.size,
-                    onImport = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
-                    onBak = { bakLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
-                    onThemes = { screen = Screen.Themes },
-                    onCreate = { screen = Screen.Create }
+    fun closeDrawerAndGo(target: Screen) {
+        screen = target
+        scope.launch { drawerState.close() }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = true,
+        drawerContent = {
+            ModalDrawerSheet {
+                Spacer(Modifier.height(30.dp))
+                Column(Modifier.padding(horizontal = 20.dp)) {
+                    Text(
+                        "M4X",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        "THEME STUDIO",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+
+                DrawerNavItem(Icons.Default.Home, "Trang chủ", screen == Screen.Home) { closeDrawerAndGo(Screen.Home) }
+                DrawerNavItem(Icons.Default.Palette, "Chủ đề", screen == Screen.Themes) { closeDrawerAndGo(Screen.Themes) }
+                DrawerNavItem(Icons.Default.Tune, "Tạo bản Việt hóa", screen == Screen.Create) { closeDrawerAndGo(Screen.Create) }
+                DrawerNavItem(Icons.Default.Settings, "Cài đặt", screen == Screen.Settings) { closeDrawerAndGo(Screen.Settings) }
+                DrawerNavItem(Icons.Default.Info, "Giới thiệu", screen == Screen.About) { closeDrawerAndGo(Screen.About) }
+
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "V3.2 • NO ROOT",
+                    modifier = Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Screen.Themes -> ThemesScreen(
-                    themes = themes,
-                    onBack = { screen = Screen.Home },
-                    onImport = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
-                    onTranslate = { selected = it; screen = Screen.Translate },
-                    onDelete = vm::delete,
-                    onExport = { t -> vm.export(t) { r -> message = r.fold({ "Đã lưu vào Download/M4XThemeStudio • Mở Theme Manager để nhập thủ công" }, { it.message ?: "Xuất tệp thất bại" }) } },
-                    onApply = { message = "Bản No-Root: hãy Việt hóa → Xuất MTZ → mở Theme Manager và nhập thủ công" }
-                )
-                Screen.Translate -> TranslateScreen(
-                    theme = selected,
-                    busy = busy,
-                    progress = progress,
-                    onBack = { screen = Screen.Themes },
-                    onRun = { options ->
-                        selected?.let { t ->
-                            vm.translate(t, options) { r ->
-                                message = r.fold(
-                                    { "Xong: ${it.changedFiles} tệp đổi • XML/ảnh ${it.replacements} lượt • OCR ${it.ocrImages} ảnh/${it.ocrTranslatedLines} dòng" },
-                                    { it.message ?: "Việt hóa thất bại" }
-                                )
+            }
+        }
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(remember { SnackbarHostState() }) },
+            containerColor = MaterialTheme.colorScheme.background
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                when (screen) {
+                    Screen.Home -> HomeScreen(
+                        themeCount = themes.size,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onImport = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                        onBak = { bakLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                        onThemes = { screen = Screen.Themes },
+                        onCreate = { screen = Screen.Create }
+                    )
+
+                    Screen.Themes -> ThemesScreen(
+                        themes = themes,
+                        onBack = { screen = Screen.Home },
+                        onImport = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                        onTranslate = { selected = it; screen = Screen.Translate },
+                        onDelete = vm::delete,
+                        onExport = { t -> vm.export(t) { r -> message = r.fold({ "Đã lưu vào Download/M4XThemeStudio • Mở Theme Manager để nhập thủ công" }, { it.message ?: "Xuất tệp thất bại" }) } },
+                        onApply = { message = "Bản No-Root: Việt hóa → Xuất MTZ → mở Theme Manager và nhập thủ công" }
+                    )
+
+                    Screen.Translate -> TranslateScreen(
+                        theme = selected,
+                        busy = busy,
+                        progress = progress,
+                        onBack = { screen = Screen.Themes },
+                        onRun = { options ->
+                            selected?.let { t ->
+                                vm.translate(t, options) { r ->
+                                    message = r.fold(
+                                        { "Xong: ${it.changedFiles} tệp đổi • ${it.replacements} lượt thay • OCR ${it.ocrImages} ảnh/${it.ocrTranslatedLines} dòng • Gemini ${it.geminiImages} ảnh" },
+                                        { it.message ?: "Việt hóa thất bại" }
+                                    )
+                                }
+                            }
+                        },
+                        onExport = {
+                            selected?.let { old ->
+                                val fresh = themes.firstOrNull { it.id == old.id } ?: old
+                                vm.export(fresh) { r -> message = r.fold({ "Đã lưu vào Download/M4XThemeStudio" }, { it.message ?: "Xuất tệp thất bại" }) }
                             }
                         }
-                    },
-                    onExport = {
-                        selected?.let { old ->
-                            val fresh = themes.firstOrNull { it.id == old.id } ?: old
-                            vm.export(fresh) { r -> message = r.fold({ "Đã lưu vào Download/M4XThemeStudio" }, { it.message ?: "Xuất tệp thất bại" }) }
+                    )
+
+                    Screen.Create -> CreateScreen(
+                        onBack = { screen = Screen.Home },
+                        onChooseBase = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }
+                    )
+
+                    Screen.Settings -> SettingsScreen(onBack = { screen = Screen.Home })
+                    Screen.About -> AboutScreen(onBack = { screen = Screen.Home })
+                }
+
+                if (busy && screen != Screen.Translate) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(18.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        tonalElevation = 8.dp
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Đang nhập chủ đề…")
                         }
                     }
-                )
-                Screen.Create -> CreateScreen(onBack = { screen = Screen.Home }, onChooseBase = {
-                    importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
-                })
-            }
+                }
 
-            if (busy && screen != Screen.Translate) {
-                Surface(
-                    modifier = Modifier.align(Alignment.Center),
-                    shape = RoundedCornerShape(20.dp),
-                    tonalElevation = 8.dp
-                ) {
-                    Row(Modifier.padding(22.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
-                        Spacer(Modifier.width(14.dp))
-                        Text("Đang xử lý chủ đề…")
+                message?.let { msg ->
+                    LaunchedEffect(msg) {
+                        kotlinx.coroutines.delay(3000)
+                        message = null
                     }
-                }
-            }
-
-            message?.let { msg ->
-                LaunchedEffect(msg) {
-                    kotlinx.coroutines.delay(3000)
-                    message = null
-                }
-                Surface(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(18.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.inverseSurface
-                ) {
-                    Text(msg, Modifier.padding(horizontal = 18.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(18.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.inverseSurface
+                    ) {
+                        Text(msg, Modifier.padding(horizontal = 18.dp, vertical = 12.dp), color = MaterialTheme.colorScheme.inverseOnSurface)
+                    }
                 }
             }
         }
@@ -135,7 +200,24 @@ fun M4XThemeStudioApp(vm: ThemeViewModel) {
 }
 
 @Composable
-private fun HomeScreen(themeCount: Int, onImport: () -> Unit, onBak: () -> Unit, onThemes: () -> Unit, onCreate: () -> Unit) {
+private fun DrawerNavItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    NavigationDrawerItem(
+        selected = selected,
+        onClick = onClick,
+        icon = { Icon(icon, null) },
+        label = { Text(label) },
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
+    )
+}
+
+
+@Composable
+private fun HomeScreen(themeCount: Int, onMenu: () -> Unit, onImport: () -> Unit, onBak: () -> Unit, onThemes: () -> Unit, onCreate: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp),
         contentPadding = PaddingValues(top = 36.dp, bottom = 36.dp),
@@ -143,7 +225,9 @@ private fun HomeScreen(themeCount: Int, onImport: () -> Unit, onBak: () -> Unit,
     ) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Menu, null, Modifier.size(34.dp))
+                IconButton(onClick = onMenu) {
+                    Icon(Icons.Default.Menu, "Mở menu", Modifier.size(34.dp))
+                }
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("M4X", color = MaterialTheme.colorScheme.primary, fontSize = 25.sp, fontWeight = FontWeight.Black)
@@ -174,7 +258,7 @@ private fun HomeScreen(themeCount: Int, onImport: () -> Unit, onBak: () -> Unit,
             }
         }
         item {
-            Text("M4X Theme Studio V2.2 NO ROOT • MTZ + XML + OCR ảnh + Lockscreen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("M4X Theme Studio V3.2 • Hybrid ML Kit + Gemini • NO ROOT", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -270,7 +354,11 @@ private fun ThemeCard(theme: ThemeInfo, onTranslate: (ThemeInfo) -> Unit, onDele
             }
             Column(Modifier.padding(14.dp)) {
                 Text(theme.name, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${theme.xmlCount} XML • ${theme.imageCount} ảnh • ${formatSize(theme.sizeBytes)}", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    if (theme.xmlCount == 0 && theme.imageCount == 0) "Sẽ quét khi Việt hóa • ${formatSize(theme.sizeBytes)}"
+                    else "${theme.xmlCount} XML • ${theme.imageCount} ảnh • ${formatSize(theme.sizeBytes)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 Spacer(Modifier.height(10.dp))
                 Button(onClick = { if (theme.translatedPath != null) onExport(theme) else onApply() }, modifier = Modifier.fillMaxWidth()) {
                     Text(if (theme.translatedPath != null) "Xuất bản Việt hóa" else "Việt hóa trước")
@@ -290,6 +378,8 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
     var locale by remember { mutableStateOf(true) }
     var manifest by remember { mutableStateOf(true) }
     var images by remember { mutableStateOf(true) }
+    var useGemini by remember { mutableStateOf(false) }
+    var geminiKey by remember { mutableStateOf("") }
     var custom by remember { mutableStateOf("") }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
@@ -298,14 +388,33 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
             Column(Modifier.padding(horizontal = 24.dp)) {
                 Text(theme?.name ?: "Chưa chọn chủ đề", fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(6.dp))
-                Text("Engine V2 tự mở MTZ/lockscreen, quét ZIP lồng nhau, nhận diện chữ trong XML/MAML và OCR chữ Trung/Anh trong ảnh rồi chuyển sang tiếng Việt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Engine V3.2 tự mở MTZ/lockscreen, quét ZIP lồng nhau, nhận diện chữ trong XML/MAML và OCR chữ Trung/Anh trong ảnh rồi chuyển sang tiếng Việt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
                 OptionRow("Việt hóa XML", "Dịch chuỗi tiếng Trung/Anh phổ biến trong lockscreen, statusbar…", xml) { xml = it }
                 OptionRow("Chuẩn hóa locale", "Đổi zh_CN / zh-CN sang vi_VN / vi-VN", locale) { locale = it }
                 OptionRow("Manifest / description", "Việt hóa mô tả và metadata dạng văn bản", manifest) { manifest = it }
                 OptionRow("OCR ảnh có chữ", "Tự nhận diện chữ Trung/Anh trong PNG/JPG/WebP rồi ghi chữ Việt trực tiếp lên ảnh", images) { images = it }
                 Spacer(Modifier.height(8.dp))
-                Text("Không cần Gemini API: bản V2 dùng ML Kit trên máy. Lần đầu có thể cần tải model ngôn ngữ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                OptionRow(
+                    "Gemini Vision (tùy chọn)",
+                    "Nhận diện ảnh khó tốt hơn; nếu API lỗi app tự quay về ML Kit offline",
+                    useGemini
+                ) { useGemini = it }
+                if (useGemini) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = geminiKey,
+                        onValueChange = { geminiKey = it.trim() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Gemini API key") },
+                        placeholder = { Text("AIza…") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        supportingText = { Text("Chỉ dùng trong lần xử lý này, không nhúng vào APK") }
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("ML Kit luôn là chế độ mặc định miễn phí. Lần đầu có thể cần mạng để tải model ngôn ngữ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(18.dp))
                 Text("Từ thay thế riêng", fontWeight = FontWeight.Bold)
                 Text("Mỗi dòng: chữ gốc=tiếng Việt. Ví dụ: 解锁=Vuốt để mở khóa", style = MaterialTheme.typography.bodySmall)
@@ -330,11 +439,13 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
                                 normalizeVietnameseLocale = locale,
                                 translateManifest = manifest,
                                 translateImages = images,
+                                useGeminiForImages = useGemini && geminiKey.isNotBlank(),
+                                geminiApiKey = if (useGemini) geminiKey else "",
                                 customPairs = parsePairs(custom)
                             )
                         )
                     },
-                    enabled = theme != null && !busy,
+                    enabled = theme != null && !busy && (!useGemini || geminiKey.isNotBlank()),
                     modifier = Modifier.fillMaxWidth().height(58.dp)
                 ) {
                     Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Bắt đầu Việt hóa")
@@ -404,6 +515,62 @@ private fun CreateScreen(onBack: () -> Unit, onChooseBase: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun SettingsScreen(onBack: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { TopBar("Cài đặt", onBack) }
+        item {
+            Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Column(Modifier.padding(20.dp)) {
+                        Text("Xử lý nhanh", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Khi mở MTZ, V3.2 chỉ sao chép file và lấy preview nhanh. XML, ảnh và ZIP lồng nhau chỉ được quét khi bạn bấm Bắt đầu Việt hóa.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Column(Modifier.padding(20.dp)) {
+                        Text("Chế độ NO ROOT", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Ứng dụng không tự can thiệp dữ liệu riêng của Xiaomi Theme Manager. Sau khi xuất MTZ, bạn nhập thủ công trong ứng dụng Chủ đề.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutScreen(onBack: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { TopBar("Giới thiệu", onBack) }
+        item {
+            Column(
+                Modifier.fillMaxWidth().padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("M4X", color = MaterialTheme.colorScheme.primary, fontSize = 42.sp, fontWeight = FontWeight.Black)
+                Text("THEME STUDIO", fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                Spacer(Modifier.height(20.dp))
+                Text("Phiên bản 3.2.0 • NO ROOT", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Công cụ nhập, phân tích, Việt hóa và đóng gói theme Xiaomi/HyperOS.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun TopBar(title: String, onBack: () -> Unit) {

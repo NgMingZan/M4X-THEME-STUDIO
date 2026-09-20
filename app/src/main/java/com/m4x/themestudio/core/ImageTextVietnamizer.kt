@@ -21,13 +21,15 @@ import kotlin.math.min
 
 /** OCRs text baked into theme images and replaces detected Chinese/English UI text with Vietnamese. */
 class ImageTextVietnamizer(
-    private val translator: VietnameseMlTranslator
+    private val translator: VietnameseMlTranslator,
+    private val gemini: GeminiImageTranslator? = null
 ) : Closeable {
     data class Result(
         val bytes: ByteArray,
         val detectedLines: Int,
         val translatedLines: Int,
-        val changed: Boolean
+        val changed: Boolean,
+        val usedGemini: Boolean = false
     )
 
     private val chinese = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
@@ -39,6 +41,32 @@ class ImageTextVietnamizer(
         if (bitmap.width < 120 || bitmap.height < 48 || bitmap.width * bitmap.height > 20_000_000) {
             bitmap.recycle()
             return Result(bytes, 0, 0, false)
+        }
+
+        val geminiClient = gemini
+        val geminiLines = if (geminiClient != null) runCatching {
+            geminiClient.recognize(bytes, fileName, bitmap.width, bitmap.height)
+        }.getOrNull().orEmpty() else emptyList()
+
+        if (geminiLines.isNotEmpty()) {
+            val mutable = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            bitmap.recycle()
+            val canvas = Canvas(mutable)
+            var translatedCount = 0
+            geminiLines.forEach { line ->
+                val box = Rect(line.left, line.top, line.right, line.bottom)
+                if (box.width() > 2 && box.height() > 2) {
+                    paintReplacement(canvas, mutable, box, line.vietnamese)
+                    translatedCount++
+                }
+            }
+            if (translatedCount > 0) {
+                val encoded = encode(mutable, fileName)
+                mutable.recycle()
+                return Result(encoded, geminiLines.size, translatedCount, true, true)
+            }
+            mutable.recycle()
+            return Result(bytes, geminiLines.size, 0, false, true)
         }
 
         val input = InputImage.fromBitmap(bitmap, 0)
@@ -71,16 +99,21 @@ class ImageTextVietnamizer(
             return Result(bytes, lines.size, 0, false)
         }
 
+        val result = encode(mutable, fileName)
+        mutable.recycle()
+        return Result(result, lines.size, translatedCount, true)
+    }
+
+    private fun encode(bitmap: Bitmap, fileName: String): ByteArray {
         val out = ByteArrayOutputStream()
         when {
             fileName.endsWith(".jpg", true) || fileName.endsWith(".jpeg", true) ->
-                mutable.compress(Bitmap.CompressFormat.JPEG, 96, out)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 96, out)
             fileName.endsWith(".webp", true) ->
-                @Suppress("DEPRECATION") mutable.compress(Bitmap.CompressFormat.WEBP, 96, out)
-            else -> mutable.compress(Bitmap.CompressFormat.PNG, 100, out)
+                @Suppress("DEPRECATION") bitmap.compress(Bitmap.CompressFormat.WEBP, 96, out)
+            else -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
-        mutable.recycle()
-        return Result(out.toByteArray(), lines.size, translatedCount, true)
+        return out.toByteArray()
     }
 
     private fun mergeLines(first: Text?, second: Text?): List<Text.Line> {
