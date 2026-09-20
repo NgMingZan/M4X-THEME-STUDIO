@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -98,7 +99,7 @@ fun M4XThemeStudioApp(vm: ThemeViewModel) {
 
                 Spacer(Modifier.weight(1f))
                 Text(
-                    "V3.1 • NO ROOT",
+                    "V3.2 • NO ROOT",
                     modifier = Modifier.padding(24.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -140,7 +141,7 @@ fun M4XThemeStudioApp(vm: ThemeViewModel) {
                             selected?.let { t ->
                                 vm.translate(t, options) { r ->
                                     message = r.fold(
-                                        { "Xong: ${it.changedFiles} tệp đổi • ${it.replacements} lượt thay • OCR ${it.ocrImages} ảnh/${it.ocrTranslatedLines} dòng" },
+                                        { "Xong: ${it.changedFiles} tệp đổi • ${it.replacements} lượt thay • OCR ${it.ocrImages} ảnh/${it.ocrTranslatedLines} dòng • Gemini ${it.geminiImages} ảnh" },
                                         { it.message ?: "Việt hóa thất bại" }
                                     )
                                 }
@@ -257,7 +258,7 @@ private fun HomeScreen(themeCount: Int, onMenu: () -> Unit, onImport: () -> Unit
             }
         }
         item {
-            Text("M4X Theme Studio V3.1 NO ROOT • MTZ + XML + OCR ảnh + Lockscreen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("M4X Theme Studio V3.2 • Hybrid ML Kit + Gemini • NO ROOT", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -377,6 +378,8 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
     var locale by remember { mutableStateOf(true) }
     var manifest by remember { mutableStateOf(true) }
     var images by remember { mutableStateOf(true) }
+    var useGemini by remember { mutableStateOf(false) }
+    var geminiKey by remember { mutableStateOf("") }
     var custom by remember { mutableStateOf("") }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
@@ -385,14 +388,33 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
             Column(Modifier.padding(horizontal = 24.dp)) {
                 Text(theme?.name ?: "Chưa chọn chủ đề", fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(6.dp))
-                Text("Engine V3.1 tự mở MTZ/lockscreen, quét ZIP lồng nhau, nhận diện chữ trong XML/MAML và OCR chữ Trung/Anh trong ảnh rồi chuyển sang tiếng Việt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Engine V3.2 tự mở MTZ/lockscreen, quét ZIP lồng nhau, nhận diện chữ trong XML/MAML và OCR chữ Trung/Anh trong ảnh rồi chuyển sang tiếng Việt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
                 OptionRow("Việt hóa XML", "Dịch chuỗi tiếng Trung/Anh phổ biến trong lockscreen, statusbar…", xml) { xml = it }
                 OptionRow("Chuẩn hóa locale", "Đổi zh_CN / zh-CN sang vi_VN / vi-VN", locale) { locale = it }
                 OptionRow("Manifest / description", "Việt hóa mô tả và metadata dạng văn bản", manifest) { manifest = it }
                 OptionRow("OCR ảnh có chữ", "Tự nhận diện chữ Trung/Anh trong PNG/JPG/WebP rồi ghi chữ Việt trực tiếp lên ảnh", images) { images = it }
                 Spacer(Modifier.height(8.dp))
-                Text("Không cần Gemini API: bản V3.1 dùng ML Kit trên máy. Lần đầu có thể cần tải model ngôn ngữ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                OptionRow(
+                    "Gemini Vision (tùy chọn)",
+                    "Nhận diện ảnh khó tốt hơn; nếu API lỗi app tự quay về ML Kit offline",
+                    useGemini
+                ) { useGemini = it }
+                if (useGemini) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = geminiKey,
+                        onValueChange = { geminiKey = it.trim() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Gemini API key") },
+                        placeholder = { Text("AIza…") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        supportingText = { Text("Chỉ dùng trong lần xử lý này, không nhúng vào APK") }
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("ML Kit luôn là chế độ mặc định miễn phí. Lần đầu có thể cần mạng để tải model ngôn ngữ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(18.dp))
                 Text("Từ thay thế riêng", fontWeight = FontWeight.Bold)
                 Text("Mỗi dòng: chữ gốc=tiếng Việt. Ví dụ: 解锁=Vuốt để mở khóa", style = MaterialTheme.typography.bodySmall)
@@ -417,11 +439,13 @@ private fun TranslateScreen(theme: ThemeInfo?, busy: Boolean, progress: Int, onB
                                 normalizeVietnameseLocale = locale,
                                 translateManifest = manifest,
                                 translateImages = images,
+                                useGeminiForImages = useGemini && geminiKey.isNotBlank(),
+                                geminiApiKey = if (useGemini) geminiKey else "",
                                 customPairs = parsePairs(custom)
                             )
                         )
                     },
-                    enabled = theme != null && !busy,
+                    enabled = theme != null && !busy && (!useGemini || geminiKey.isNotBlank()),
                     modifier = Modifier.fillMaxWidth().height(58.dp)
                 ) {
                     Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Bắt đầu Việt hóa")
@@ -503,7 +527,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
                         Text("Xử lý nhanh", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Khi mở MTZ, V3.1 chỉ sao chép file và lấy preview nhanh. XML, ảnh và ZIP lồng nhau chỉ được quét khi bạn bấm Bắt đầu Việt hóa.",
+                            "Khi mở MTZ, V3.2 chỉ sao chép file và lấy preview nhanh. XML, ảnh và ZIP lồng nhau chỉ được quét khi bạn bấm Bắt đầu Việt hóa.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -536,7 +560,7 @@ private fun AboutScreen(onBack: () -> Unit) {
                 Text("M4X", color = MaterialTheme.colorScheme.primary, fontSize = 42.sp, fontWeight = FontWeight.Black)
                 Text("THEME STUDIO", fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
                 Spacer(Modifier.height(20.dp))
-                Text("Phiên bản 3.1.0 • NO ROOT", fontWeight = FontWeight.Bold)
+                Text("Phiên bản 3.2.0 • NO ROOT", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "Công cụ nhập, phân tích, Việt hóa và đóng gói theme Xiaomi/HyperOS.",
