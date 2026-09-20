@@ -36,11 +36,18 @@ class GeminiImageTranslator(private val apiKey: String) {
         val request = JSONObject().apply {
             put("contents", JSONArray().put(JSONObject().apply {
                 put("role", "user")
-                put("parts", JSONArray()
-                    .put(JSONObject().put("text", prompt))
-                    .put(JSONObject().put("inline_data", JSONObject()
+                val imagePart = JSONObject().put(
+                    "inline_data",
+                    JSONObject()
                         .put("mime_type", upload.first)
-                        .put("data", Base64.encodeToString(upload.second, Base64.NO_WRAP))))
+                        .put("data", Base64.encodeToString(upload.second, Base64.NO_WRAP))
+                )
+                put(
+                    "parts",
+                    JSONArray()
+                        .put(JSONObject().put("text", prompt))
+                        .put(imagePart)
+                )
             }))
             put("generationConfig", JSONObject()
                 .put("temperature", 0.1)

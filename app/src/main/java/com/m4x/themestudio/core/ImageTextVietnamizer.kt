@@ -43,8 +43,9 @@ class ImageTextVietnamizer(
             return Result(bytes, 0, 0, false)
         }
 
-        val geminiLines = if (gemini != null) runCatching {
-            gemini.recognize(bytes, fileName, bitmap.width, bitmap.height)
+        val geminiClient = gemini
+        val geminiLines = if (geminiClient != null) runCatching {
+            geminiClient.recognize(bytes, fileName, bitmap.width, bitmap.height)
         }.getOrNull().orEmpty() else emptyList()
 
         if (geminiLines.isNotEmpty()) {
