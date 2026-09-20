@@ -1,8 +1,8 @@
-# M4X Theme Studio V3.0 — NO ROOT
+# M4X Theme Studio V3.2 — HYBRID, NO ROOT
 
 M4X Theme Studio là công cụ Android xử lý theme Xiaomi/HyperOS theo luồng tệp chuẩn Android, không yêu cầu root để đọc, Việt hoá và đóng gói MTZ.
 
-## V3.0 có gì
+## V3.2 có gì
 
 - Nhập `.mtz`, `.zip`, `.bak` hoặc lockscreen dạng ZIP.
 - Kiểm tra cấu trúc MTZ/ZIP trước khi xử lý.
@@ -12,7 +12,9 @@ M4X Theme Studio là công cụ Android xử lý theme Xiaomi/HyperOS theo luồ
 - Quét XML/MAML/JSON/text trong theme và ZIP lồng nhau.
 - Dịch Trung/Anh/Nhật/Hàn → Việt bằng ML Kit.
 - Bảo vệ placeholder như `%s`, `%1$d`, `${...}`, `#{...}`.
-- OCR ảnh khi người dùng bật tuỳ chọn.
+- OCR ảnh offline bằng ML Kit khi người dùng bật tuỳ chọn.
+- Gemini Vision tùy chọn cho ảnh khó; API lỗi sẽ tự quay về ML Kit.
+- API key chỉ được truyền trong lần xử lý, không nhúng cố định vào APK.
 - Xuất kết quả vào `Download/M4XThemeStudio`.
 - GitHub Actions tự build APK với JDK 17 + Android API 35.
 
@@ -28,4 +30,4 @@ Không-root vẫn không thể tự đọc dữ liệu riêng của `com.android
 
 GitHub → Actions → **Build Android APK** → Run workflow.
 
-Artifact: `M4X-Theme-Studio-V3-debug`
+Artifact: `M4X-Theme-Studio-V3.2-Hybrid-debug`
