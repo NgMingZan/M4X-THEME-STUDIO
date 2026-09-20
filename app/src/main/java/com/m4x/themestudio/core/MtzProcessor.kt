@@ -39,7 +39,8 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         var replacements: Int = 0,
         var skippedBinaryFiles: Int = 0,
         var ocrImages: Int = 0,
-        var ocrLines: Int = 0
+        var ocrLines: Int = 0,
+        var geminiImages: Int = 0
     )
 
     fun importTheme(uri: Uri): ThemeInfo {
@@ -88,7 +89,9 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
         val stats = ProcessStats()
 
         VietnameseMlTranslator(context, options.customPairs).use { translator ->
-            ImageTextVietnamizer(translator).use { imageVietnamizer ->
+            val gemini = options.geminiApiKey.trim().takeIf { options.useGeminiForImages && it.isNotBlank() }
+                ?.let(::GeminiImageTranslator)
+            ImageTextVietnamizer(translator, gemini).use { imageVietnamizer ->
                 FileInputStream(source).use { input ->
                     FileOutputStream(tempOutput).use { out ->
                         processZip(input, out, 0, options, translator, imageVietnamizer, stats, totalFiles, onProgress)
@@ -110,7 +113,8 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
             replacements = stats.replacements,
             skippedBinaryFiles = stats.skippedBinaryFiles,
             ocrImages = stats.ocrImages,
-            ocrTranslatedLines = stats.ocrLines
+            ocrTranslatedLines = stats.ocrLines,
+            geminiImages = stats.geminiImages
         )
         onProgress(100)
         return updated to report
@@ -165,6 +169,7 @@ class MtzProcessor(private val context: Context, private val store: ThemeStore) 
                                     stats.changedFiles++
                                     stats.ocrImages++
                                     stats.ocrLines += result.translatedLines
+                                    if (result.usedGemini) stats.geminiImages++
                                     stats.replacements += result.translatedLines
                                     result.bytes
                                 } else bytes
