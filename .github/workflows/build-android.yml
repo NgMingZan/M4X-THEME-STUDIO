@@ -45,7 +45,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: M4X-Theme-Studio-V3-debug
+          name: M4X-Theme-Studio-V3.2-Hybrid-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
